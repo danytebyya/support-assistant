@@ -1,3 +1,4 @@
+import asyncio
 import json
 from dataclasses import dataclass
 
@@ -18,10 +19,11 @@ class Hit:
 
 class KnowledgeBase:
     def __init__(self, ollama: OllamaClient) -> None:
-        settings.chroma_path.mkdir(parents=True, exist_ok=True)
-        self.client = chromadb.PersistentClient(path=str(settings.chroma_path))
+        settings.safe_chroma_path.mkdir(parents=True, exist_ok=True)
+        self.client = chromadb.PersistentClient(path=str(settings.safe_chroma_path))
         self._collection()
         self.ollama = ollama
+        self._rebuild_lock = asyncio.Lock()
 
     def _collection(self):
         return self.client.get_or_create_collection(
@@ -33,28 +35,29 @@ class KnowledgeBase:
         return self._collection().count()
 
     async def rebuild(self) -> int:
-        items = json.loads(settings.knowledge_path.read_text(encoding="utf-8"))
-        if not isinstance(items, list) or not items:
-            raise ValueError("Knowledge base must be a non-empty JSON array")
-        docs = [f"Вопрос: {x['question']}\nОтвет: {x['answer']}" for x in items]
-        embeddings = await self.ollama.embed(docs)
-        try:
-            self.client.delete_collection("lime_faq")
-        except (ValueError, NotFoundError):
-            pass
-        collection = self.client.create_collection(
-            "lime_faq", metadata={"hnsw:space": "cosine"}
-        )
-        collection.add(
-            ids=[str(x.get("id", i)) for i, x in enumerate(items)],
-            documents=docs,
-            embeddings=embeddings,
-            metadatas=[{
-                "question": x["question"], "answer": x["answer"],
-                "url": x.get("url", "https://limehd.tv/faq/0")
-            } for x in items],
-        )
-        return len(items)
+        async with self._rebuild_lock:
+            items = json.loads(settings.safe_knowledge_path.read_text(encoding="utf-8"))
+            if not isinstance(items, list) or not items:
+                raise ValueError("Knowledge base must be a non-empty JSON array")
+            docs = [f"Вопрос: {x['question']}\nОтвет: {x['answer']}" for x in items]
+            embeddings = await self.ollama.embed(docs)
+            try:
+                self.client.delete_collection("lime_faq")
+            except (ValueError, NotFoundError):
+                pass
+            collection = self.client.create_collection(
+                "lime_faq", metadata={"hnsw:space": "cosine"}
+            )
+            collection.add(
+                ids=[str(x.get("id", i)) for i, x in enumerate(items)],
+                documents=docs,
+                embeddings=embeddings,
+                metadatas=[{
+                    "question": x["question"], "answer": x["answer"],
+                    "url": x.get("url", "https://limehd.tv/faq/0")
+                } for x in items],
+            )
+            return len(items)
 
     async def search(self, query: str, limit: int | None = None) -> list[Hit]:
         if self.count == 0:

@@ -31,3 +31,13 @@ def test_store_remembers_accumulated_context():
         return await store.last_user("session")
 
     assert asyncio.run(scenario()) == "исходная тема + айфон"
+
+
+def test_multiple_follow_ups_do_not_nest_recursively():
+    step1 = expand_follow_up("а на ТВ?", "Как скачать?")
+    step2 = expand_follow_up("а на Самсунг?", step1)
+    assert step2.count("Предыдущий вопрос:") == 1
+    assert "Как скачать?" in step2
+    assert "а на ТВ?" in step2
+    assert "а на Самсунг?" in step2
+

@@ -65,7 +65,7 @@
   }
   function finishMessage(item, sources, links) {
     linkifyMessage(item); compactMessage(item);
-    if(sources && sources.length){ const list=document.createElement("div"); list.className="sources"; list.append("Источники:"); sources.forEach(s=>{const link=document.createElement("a");link.href=s.url;link.target="_blank";link.rel="noopener";link.textContent=`↗ ${s.question}`;list.appendChild(link)});item.appendChild(list); }
+    if(sources && sources.length){ const list=document.createElement("div"); list.className="sources"; list.append("Источники:"); sources.forEach(s=>{try{const url=new URL(s.url,document.baseURI);if(!["http:","https:"].includes(url.protocol))return;const link=document.createElement("a");link.href=url.href;link.target="_blank";link.rel="noopener";link.textContent=`↗ ${s.question}`;list.appendChild(link)}catch(_){}});if(list.childElementCount>0)item.appendChild(list); }
     if(links && links.length){const actions=document.createElement("div");actions.className="actions";links.forEach(action=>{try{const url=new URL(action.url,document.baseURI);if(!["http:","https:"].includes(url.protocol))return;const link=document.createElement("a");link.className="action-link";link.href=url.href;link.target="_blank";link.rel="noopener";link.textContent=action.label;actions.appendChild(link)}catch(_){}});if(actions.childElementCount)item.appendChild(actions)}
     if(!sources?.length && !links?.length){
       const style=getComputedStyle(item), oneLine=parseFloat(style.lineHeight)+parseFloat(style.paddingTop)+parseFloat(style.paddingBottom)+1;

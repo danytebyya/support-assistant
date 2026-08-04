@@ -76,15 +76,22 @@ async def resolve_knowledge(message: str) -> tuple[str, list[Source]]:
     return OFF_TOPIC, []
 
 
+import logging
+
+logger = logging.getLogger("lime_ai")
+
 async def require_admin(x_admin_token: str | None = Header(default=None)) -> None:
+    if settings.admin_token == "change-this-before-production":
+        logger.warning("SECURITY WARNING: Using default ADMIN_TOKEN!")
     if not x_admin_token or not secrets.compare_digest(x_admin_token, settings.admin_token):
         raise HTTPException(401, "Требуется корректный X-Admin-Token")
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    settings.log_path.parent.mkdir(parents=True, exist_ok=True)
+    settings.safe_log_path.parent.mkdir(parents=True, exist_ok=True)
     yield
+    await ollama.close()
 
 
 app = FastAPI(
@@ -101,8 +108,11 @@ app.add_middleware(
 
 
 @app.middleware("http")
-async def disable_widget_cache(request: Request, call_next):
+async def apply_security_headers_and_cache(request: Request, call_next):
     response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     if request.url.path == "/" or request.url.path.startswith("/widget/"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"

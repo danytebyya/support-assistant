@@ -49,6 +49,10 @@ install_mac_ollama() {
   say "Ollama не найдена. Скачиваю актуальную универсальную сборку для macOS…" >&2
   run mkdir -p "$runtime" >&2
   run curl -fL --retry 3 "$MAC_DOWNLOAD_URL" -o "$archive" >&2
+  if unzip -l "$archive" | grep -E -q '(^|[[:space:]])\.\./'; then
+    say "Ошибка: ZIP-архив содержит небезопасные относительные пути." >&2
+    exit 1
+  fi
   run unzip -q -o "$archive" -d "$runtime" >&2
   run rm -f "$archive" >&2
   printf '%s\n' "$runtime/Ollama.app/Contents/Resources/ollama"

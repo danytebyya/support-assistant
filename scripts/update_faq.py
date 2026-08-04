@@ -4,9 +4,11 @@ The parser accepts common accordion/FAQ markup and JSON-LD FAQPage data. It
 refuses to overwrite a working knowledge base when the site returns an anti-bot
 page or an unexpectedly small result.
 """
+import ipaddress
 import json
 import os
 import sys
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -14,6 +16,24 @@ from bs4 import BeautifulSoup
 
 URL = os.getenv("FAQ_URL", "https://limehd.tv/faq/0")
 OUTPUT = Path(os.getenv("KNOWLEDGE_PATH", "data/knowledge/faq.json"))
+
+
+def is_url_safe(url_str: str) -> bool:
+    parsed = urllib.parse.urlparse(url_str)
+    if parsed.scheme not in ("http", "https"):
+        return False
+    hostname = parsed.hostname
+    if not hostname:
+        return False
+    if hostname.lower() in ("localhost", "127.0.0.1", "::1"):
+        return False
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local:
+            return False
+    except ValueError:
+        pass
+    return True
 
 
 def clean(value: str) -> str:
@@ -53,6 +73,8 @@ def parse(html: str) -> list[dict[str, str]]:
 
 
 def main() -> None:
+    if not is_url_safe(URL):
+        sys.exit(f"FAQ sync aborted: Invalid or unsafe URL '{URL}'")
     request = urllib.request.Request(URL, headers={"User-Agent": "Mozilla/5.0 LimeFAQSync/1.0"})
     with urllib.request.urlopen(request, timeout=30) as response:
         html = response.read().decode("utf-8", errors="replace")

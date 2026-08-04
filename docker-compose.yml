@@ -2,13 +2,18 @@ services:
   api:
     build: .
     ports:
-      - "8001:8000"
+      - "127.0.0.1:8001:8000"
     env_file: .env
     environment:
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
     volumes:
       - ./data:/app/data
       - ./widget:/app/widget:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
     restart: unless-stopped
 
   ollama:
@@ -16,9 +21,13 @@ services:
     pull_policy: always
     profiles: ["docker-ollama"]
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        limits:
+          memory: 8G
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 10s

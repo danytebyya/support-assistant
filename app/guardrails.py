@@ -37,8 +37,9 @@ PRIVATE_RE = re.compile(
     r"(архитектур|реализац).{0,25}(ассистент|систем)|что у тебя внутри|раскрой.*промпт)", re.I
 )
 INJECTION_RE = re.compile(
-    r"(игнорируй|забудь|отмени).{0,35}(инструкц|правил|промпт)|"
-    r"(developer|system)\s*(message|prompt)|jailbreak|режим разработчика", re.I
+    r"(игнорируй|забудь|отмени|сбрось).{0,35}(инструкц|правил|промпт)|"
+    r"\b(?:ignore|disregard|forget|override|bypass)\b.{0,35}\b(?:instruction|rule|prompt|system)s?\b|"
+    r"(?:developer|system)\s*(?:message|prompt|mode)|jailbreak|режим разработчика", re.I
 )
 DOMAIN_RE = re.compile(
     r"(lime|лайм|\bтв\b|телеканал|канал|эфир|приложен|сайт|подписк|платеж|оплат|"
