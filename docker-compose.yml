@@ -1,0 +1,58 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+    volumes:
+      - ./data:/app/data
+      - ./widget:/app/widget:ro
+    restart: unless-stopped
+
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    pull_policy: always
+    profiles: ["docker-ollama"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  model-init:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    pull_policy: always
+    profiles: ["docker-ollama"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        pull_with_retry() {
+          model="$$1"
+          attempt=1
+          while [ "$$attempt" -le 5 ]; do
+            ollama pull "$$model" && return 0
+            echo "Retry $$attempt/5 for $$model in 10 seconds..."
+            attempt=$$((attempt + 1))
+            sleep 10
+          done
+          return 1
+        }
+        pull_with_retry qwen3-embedding:0.6b
+        pull_with_retry qwen3:8b
+    restart: "no"
+
+volumes:
+  ollama_data:

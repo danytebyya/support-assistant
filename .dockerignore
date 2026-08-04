@@ -1,0 +1,14 @@
+.git
+.env
+.venv
+__pycache__
+**/__pycache__
+.pytest_cache
+tmp
+data/chroma
+data/logs
+docs/evaluation-results.json
+*.pyc
+*.pyo
+.DS_Store
+
