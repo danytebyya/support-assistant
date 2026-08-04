@@ -153,7 +153,7 @@
         },160);
       });
     });
-    const toggle=()=>{const open=state.ui.panel.classList.toggle("open");state.ui.panel.setAttribute("aria-hidden",String(!open));fab.setAttribute("aria-expanded",String(open));if(open)setTimeout(()=>state.ui.input.focus(),440)};
+    const toggle=()=>{const open=state.ui.panel.classList.toggle("open");state.ui.panel.setAttribute("aria-hidden",String(!open));fab.setAttribute("aria-expanded",String(open));if(open)state.ui.input.focus()};
     fab.onclick=()=>{dismissCoach(root);toggle()}; root.querySelector(".x").onclick=toggle;
     root.querySelector(".new-chat").onclick=()=>{reset();state.ui.input.focus()};
     root.querySelector("form").onsubmit=e=>{e.preventDefault();const value=state.ui.input.value;state.ui.input.value="";resizeInput();send(value)};
