@@ -1,4 +1,4 @@
-from app.downloads import download_answer
+from app.downloads import DOWNLOAD_SOURCE, download_answer
 
 
 def test_ios_download_link():
@@ -38,3 +38,16 @@ def test_greeting_before_download_request_still_returns_markets():
 
 def test_regular_support_question_is_not_download_request():
     assert download_answer("Почему не показывает телеканал?") is None
+
+
+def test_download_answers_have_faq_source():
+    assert DOWNLOAD_SOURCE.url == "https://limehd.tv/faq/99999/question/99999"
+    assert DOWNLOAD_SOURCE.question == "Скачать Lime HD TV"
+
+
+def test_semantic_router_can_force_platform_after_typo_detection():
+    answer, links = download_answer(
+        "как скачаь прилжоение на айфно?", assume_download=True, platform_hint="ios"
+    )
+    assert "App Store" in answer
+    assert links[0].url == "https://apps.apple.com/app/id998832333"

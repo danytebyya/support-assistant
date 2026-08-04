@@ -13,8 +13,10 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
-from app.downloads import download_answer
+from app.conversation import ConversationStore, expand_follow_up
+from app.downloads import DOWNLOAD_SOURCE, download_answer
 from app.guardrails import OFF_TOPIC, SYSTEM_PROMPT, fixed_answer, likely_in_domain
+from app.intent_router import SemanticIntentRouter
 from app.logger import log_exchange
 from app.ollama import OllamaClient
 from app.rag import KnowledgeBase
@@ -23,6 +25,22 @@ from app.schemas import ActionLink, ChatRequest, ChatResponse, HealthResponse, S
 
 ollama = OllamaClient()
 kb = KnowledgeBase(ollama)
+intent_router = SemanticIntentRouter(ollama)
+conversations = ConversationStore()
+
+
+async def resolve_download(message: str):
+    result = download_answer(message)
+    if result is not None:
+        return result
+    intent = await intent_router.download_intent(message)
+    if intent is None:
+        return None
+    return download_answer(message, assume_download=True, platform_hint=intent.platform)
+
+
+def answer_has_no_evidence(answer: str) -> bool:
+    return bool(re.search(r"точн\w* ответ\w*.{0,35}(?:нет|не найден)|в базе знаний.{0,35}(?:нет|не найден)", answer, re.I))
 
 
 async def require_admin(x_admin_token: str | None = Header(default=None)) -> None:
@@ -66,20 +84,23 @@ async def answer_request(body: ChatRequest) -> ChatResponse:
     started = time.perf_counter()
     message = " ".join(body.message.split())
     session_id = body.session_id or str(uuid.uuid4())
+    previous_user = await conversations.last_user(session_id)
+    resolved_message = expand_follow_up(message, previous_user)
     answer = fixed_answer(message)
     sources: list[Source] = []
     links: list[ActionLink] = []
 
-    download = download_answer(message)
+    download = await resolve_download(resolved_message) if answer is None else None
     if download is not None:
         answer, actions = download
         links = [ActionLink(label=action.label, url=action.url) for action in actions]
+        sources = [Source(question=DOWNLOAD_SOURCE.question, url=DOWNLOAD_SOURCE.url, relevance=1.0)]
 
-    if answer is None and not likely_in_domain(message):
+    if answer is None and not likely_in_domain(resolved_message):
         answer = OFF_TOPIC
 
     if answer is None:
-        hits = await kb.search(message)
+        hits = await kb.search(resolved_message)
         best = hits[0].relevance if hits else 0
         if not hits or best < settings.min_relevance:
             answer = "В базе знаний Lime HD TV нет точного ответа на этот вопрос. Пожалуйста, обратитесь в службу поддержки."
@@ -94,10 +115,13 @@ async def answer_request(body: ChatRequest) -> ChatResponse:
                 )
                 answer = await ollama.chat(
                     SYSTEM_PROMPT,
-                    f"КОНТЕКСТ FAQ:\n{context}\n\nВОПРОС ПОЛЬЗОВАТЕЛЯ:\n{message}",
+                    f"КОНТЕКСТ FAQ:\n{context}\n\nВОПРОС ПОЛЬЗОВАТЕЛЯ:\n{resolved_message}",
                 )
+                if answer_has_no_evidence(answer):
+                    sources = []
 
     latency = round((time.perf_counter() - started) * 1000)
+    await conversations.add(session_id, message, answer)
     await log_exchange(session_id=session_id, question=message, answer=answer, latency_ms=latency)
     return ChatResponse(answer=answer, session_id=session_id, sources=sources, links=links, latency_ms=latency)
 
@@ -125,21 +149,24 @@ async def chat_stream(body: ChatRequest) -> StreamingResponse:
         started = time.perf_counter()
         message = " ".join(body.message.split())
         session_id = body.session_id or str(uuid.uuid4())
+        previous_user = await conversations.last_user(session_id)
+        resolved_message = expand_follow_up(message, previous_user)
         sources: list[Source] = []
         links: list[ActionLink] = []
         answer = fixed_answer(message)
         model_user: str | None = None
         try:
-            download = download_answer(message)
+            download = await resolve_download(resolved_message) if answer is None else None
             if download is not None:
                 answer, actions = download
                 links = [ActionLink(label=action.label, url=action.url) for action in actions]
+                sources = [Source(question=DOWNLOAD_SOURCE.question, url=DOWNLOAD_SOURCE.url, relevance=1.0)]
 
-            if answer is None and not likely_in_domain(message):
+            if answer is None and not likely_in_domain(resolved_message):
                 answer = OFF_TOPIC
 
             if answer is None:
-                hits = await kb.search(message)
+                hits = await kb.search(resolved_message)
                 best = hits[0].relevance if hits else 0
                 if not hits or best < settings.min_relevance:
                     answer = "В базе знаний Lime HD TV нет точного ответа на этот вопрос. Пожалуйста, обратитесь в службу поддержки."
@@ -156,7 +183,7 @@ async def chat_stream(body: ChatRequest) -> StreamingResponse:
                             f"FAQ {i + 1}\nВопрос: {hit.question}\nОтвет: {hit.answer}"
                             for i, hit in enumerate(hits)
                         )
-                        model_user = f"КОНТЕКСТ FAQ:\n{context}\n\nВОПРОС ПОЛЬЗОВАТЕЛЯ:\n{message}"
+                        model_user = f"КОНТЕКСТ FAQ:\n{context}\n\nВОПРОС ПОЛЬЗОВАТЕЛЯ:\n{resolved_message}"
 
             yield event({"type": "meta", "session_id": session_id})
             parts: list[str] = []
@@ -165,6 +192,8 @@ async def chat_stream(body: ChatRequest) -> StreamingResponse:
                     parts.append(chunk)
                     yield event({"type": "chunk", "content": chunk})
                 answer = "".join(parts).strip()
+                if answer_has_no_evidence(answer):
+                    sources = []
             else:
                 for chunk in re.findall(r"\S+\s*|\s+", answer or ""):
                     parts.append(chunk)
@@ -174,6 +203,7 @@ async def chat_stream(body: ChatRequest) -> StreamingResponse:
             if not answer:
                 answer = "Не удалось сформировать ответ. Пожалуйста, попробуйте ещё раз."
             latency = round((time.perf_counter() - started) * 1000)
+            await conversations.add(session_id, message, answer)
             await log_exchange(session_id=session_id, question=message, answer=answer, latency_ms=latency)
             yield event({
                 "type": "done",

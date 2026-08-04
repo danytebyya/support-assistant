@@ -8,6 +8,18 @@ class DownloadAction:
     url: str
 
 
+@dataclass(frozen=True)
+class DownloadSource:
+    question: str
+    url: str
+
+
+DOWNLOAD_SOURCE = DownloadSource(
+    "Скачать Lime HD TV",
+    "https://limehd.tv/faq/99999/question/99999",
+)
+
+
 DOWNLOAD_RE = re.compile(
     r"ссылк\w*|\b(?:скачать|установить|загрузить)\b|"
     r"(?:дай|пришли|покажи|нужна|где).{0,30}(?:магазин|маркет)",
@@ -22,12 +34,14 @@ HUAWEI_RE = re.compile(r"huawei|хуавей|appgallery|аппгалер", re.I)
 RUSTORE_RE = re.compile(r"rustore|рустор", re.I)
 
 
-def download_answer(message: str) -> tuple[str, list[DownloadAction]] | None:
+def download_answer(
+    message: str, *, assume_download: bool = False, platform_hint: str | None = None
+) -> tuple[str, list[DownloadAction]] | None:
     text = " ".join(message.split())
-    if not DOWNLOAD_RE.search(text):
+    if not assume_download and not DOWNLOAD_RE.search(text):
         return None
 
-    if IOS_RE.search(text):
+    if platform_hint == "ios" or IOS_RE.search(text):
         return (
             "Скачать Lime HD TV для iPhone или iPad можно в App Store. Нажмите кнопку ниже — откроется официальная страница приложения.",
             [DownloadAction("Открыть в App Store", "https://apps.apple.com/app/id998832333")],
@@ -39,27 +53,27 @@ def download_answer(message: str) -> tuple[str, list[DownloadAction]] | None:
             f"{title} доступен в RuStore. Нажмите кнопку ниже — откроется официальная карточка приложения.",
             [DownloadAction("Открыть в RuStore", f"https://www.rustore.ru/catalog/app/{package}")],
         )
-    if ANDROID_TV_RE.search(text):
+    if platform_hint == "android_tv" or ANDROID_TV_RE.search(text):
         return (
             "Для Android TV и приставок доступна отдельная версия Lime HD TV с управлением с пульта.",
             [DownloadAction("Открыть в Google Play", "https://play.google.com/store/apps/details?id=tv.limehd.stb")],
         )
-    if WINDOWS_RE.search(text):
+    if platform_hint == "windows" or WINDOWS_RE.search(text):
         return (
             "Версию Lime HD TV для Windows можно скачать на официальной странице. Там находится актуальный установщик.",
             [DownloadAction("Скачать для Windows", "https://play.limehd.tv/limewin")],
         )
-    if SMART_TV_RE.search(text):
+    if platform_hint == "smart_tv" or SMART_TV_RE.search(text):
         return (
             "Способ установки зависит от модели телевизора. На официальной странице выберите производителя и следуйте инструкции.",
             [DownloadAction("Открыть инструкции для Smart TV", "https://limehd.tv/instructions")],
         )
-    if HUAWEI_RE.search(text):
+    if platform_hint == "huawei" or HUAWEI_RE.search(text):
         return (
             "Откройте официальную страницу Lime HD TV для Android — на ней доступен актуальный вариант установки приложения.",
             [DownloadAction("Открыть страницу загрузки", "https://play.limehd.tv/limehd")],
         )
-    if ANDROID_RE.search(text):
+    if platform_hint == "android" or ANDROID_RE.search(text):
         return (
             "Скачать Lime HD TV для телефона или планшета Android можно в Google Play.",
             [DownloadAction("Открыть в Google Play", "https://play.google.com/store/apps/details?id=com.infolink.limeiptv")],
