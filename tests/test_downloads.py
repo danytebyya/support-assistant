@@ -1,4 +1,4 @@
-from app.downloads import DOWNLOAD_SOURCE, detect_platform, download_answer
+from app.downloads import DOWNLOAD_SOURCE, detect_platform, download_answer, is_download_request
 
 
 def test_ios_download_link():
@@ -38,6 +38,27 @@ def test_greeting_before_download_request_still_returns_markets():
 
 def test_regular_support_question_is_not_download_request():
     assert download_answer("Почему не показывает телеканал?") is None
+
+
+def test_video_resolution_is_not_download_request():
+    assert not is_download_request("Что такое 720p?")
+    assert download_answer("Что такое 720p?") is None
+
+
+def test_download_typo_is_detected_without_semantic_false_positives():
+    assert is_download_request("Где скочать приложение?")
+    assert is_download_request("Как скачаь приложение?")
+    assert download_answer("Где скочать приложение?") is not None
+
+
+def test_restart_program_is_not_mistaken_for_download():
+    messages = (
+        "10 мин назад началась передача, я хочу начать ее сначала",
+        "Как начать просмотр передачи сначала?",
+        "Когда начнется следующая передача?",
+    )
+    assert all(not is_download_request(message) for message in messages)
+    assert all(download_answer(message) is None for message in messages)
 
 
 def test_download_answers_have_faq_source():

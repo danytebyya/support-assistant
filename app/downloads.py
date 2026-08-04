@@ -26,6 +26,8 @@ DOWNLOAD_RE = re.compile(
     r"(?:дай|пришли|покажи|нужна|где).{0,30}(?:магазин|маркет)",
     re.I,
 )
+DOWNLOAD_ALIASES = ("скачать", "установить", "загрузить", "ссылка", "магазин", "маркет")
+DOWNLOAD_FUZZY_THRESHOLD = 0.82
 IOS_RE = re.compile(r"\b(?:ios|iphone|ipad|app\s*store)\b|айфон|айпад|эпп\s*стор", re.I)
 ANDROID_TV_RE = re.compile(r"android\s*tv|андроид\s*тв|приставк", re.I)
 ANDROID_RE = re.compile(r"\bandroid\b|андроид|google\s*play|гугл\s*плей", re.I)
@@ -70,11 +72,27 @@ def detect_platform(message: str) -> str | None:
     return best[1] if best[0] >= 0.72 else None
 
 
+def is_download_request(message: str) -> bool:
+    text = " ".join(message.lower().split())
+    if DOWNLOAD_RE.search(text):
+        return True
+    tokens = re.findall(r"[a-zа-яё]+", text)
+    return any(
+        SequenceMatcher(None, token, alias).ratio() >= DOWNLOAD_FUZZY_THRESHOLD
+        for token in tokens
+        for alias in DOWNLOAD_ALIASES
+    )
+
+
+def is_download_platform_follow_up(message: str) -> bool:
+    return detect_platform(message) is not None or bool(RUSTORE_RE.search(message))
+
+
 def download_answer(
     message: str, *, assume_download: bool = False, platform_hint: str | None = None
 ) -> tuple[str, list[DownloadAction]] | None:
     text = " ".join(message.split())
-    if not assume_download and not DOWNLOAD_RE.search(text):
+    if not assume_download and not is_download_request(text):
         return None
 
     platform = platform_hint or detect_platform(text)

@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     rate_limit_window_seconds: int = 60
     max_message_length: int = 1000
     top_k: int = 4
-    min_relevance: float = 0.24
-    direct_answer_relevance: float = 0.65
+    min_relevance: float = 0.36
+    direct_answer_relevance: float = 0.52
     admin_token: str = "change-this-before-production"
 
     @property

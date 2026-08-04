@@ -14,9 +14,13 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.conversation import ConversationStore, expand_follow_up
-from app.downloads import DOWNLOAD_SOURCE, detect_platform, download_answer
-from app.guardrails import OFF_TOPIC, SYSTEM_PROMPT, fixed_answer, likely_in_domain
-from app.intent_router import SemanticIntentRouter
+from app.downloads import (
+    DOWNLOAD_SOURCE,
+    detect_platform,
+    download_answer,
+    is_download_platform_follow_up,
+)
+from app.guardrails import OFF_TOPIC, fixed_answer, likely_in_domain
 from app.logger import log_exchange
 from app.ollama import OllamaClient
 from app.rag import KnowledgeBase
@@ -25,26 +29,51 @@ from app.schemas import ActionLink, ChatRequest, ChatResponse, HealthResponse, S
 
 ollama = OllamaClient()
 kb = KnowledgeBase(ollama)
-intent_router = SemanticIntentRouter(ollama)
 conversations = ConversationStore()
+NO_EXACT_ANSWER = (
+    "В базе знаний Lime HD TV нет точного ответа на этот вопрос. "
+    "Напишите в службу поддержки: support@limehd.tv."
+)
 
 
 async def resolve_download(message: str, latest_message: str):
     result = download_answer(latest_message)
     if result is not None:
         return result
-    intent = await intent_router.download_intent(message)
-    if intent is None:
-        return None
-    return download_answer(
-        latest_message,
-        assume_download=True,
-        platform_hint=detect_platform(latest_message),
-    )
+    if message != latest_message and is_download_platform_follow_up(latest_message):
+        return download_answer(
+            latest_message,
+            assume_download=True,
+            platform_hint=detect_platform(latest_message),
+        )
+    return None
 
 
-def answer_has_no_evidence(answer: str) -> bool:
-    return bool(re.search(r"точн\w* ответ\w*.{0,35}(?:нет|не найден)|в базе знаний.{0,35}(?:нет|не найден)", answer, re.I))
+async def resolve_knowledge(message: str) -> tuple[str, list[Source]]:
+    hits = await kb.search(message)
+    if not hits:
+        return NO_EXACT_ANSWER, []
+
+    top = hits[0]
+    if top.relevance >= settings.direct_answer_relevance:
+        source = Source(question=top.question, url=top.url, relevance=round(top.relevance, 3))
+        return top.answer, [source]
+
+    saw_support = False
+    for candidate in hits:
+        route = await ollama.faq_route(message, candidate.question, candidate.answer)
+        if route == "MATCH":
+            source = Source(
+                question=candidate.question,
+                url=candidate.url,
+                relevance=round(candidate.relevance, 3),
+            )
+            return candidate.answer, [source]
+        saw_support = saw_support or route == "SUPPORT"
+
+    if saw_support or likely_in_domain(message):
+        return NO_EXACT_ANSWER, []
+    return OFF_TOPIC, []
 
 
 async def require_admin(x_admin_token: str | None = Header(default=None)) -> None:
@@ -100,29 +129,8 @@ async def answer_request(body: ChatRequest) -> ChatResponse:
         links = [ActionLink(label=action.label, url=action.url) for action in actions]
         sources = [Source(question=DOWNLOAD_SOURCE.question, url=DOWNLOAD_SOURCE.url, relevance=1.0)]
 
-    if answer is None and not likely_in_domain(resolved_message):
-        answer = OFF_TOPIC
-
     if answer is None:
-        hits = await kb.search(resolved_message)
-        best = hits[0].relevance if hits else 0
-        if not hits or best < settings.min_relevance:
-            answer = "В базе знаний Lime HD TV нет точного ответа на этот вопрос. Пожалуйста, обратитесь в службу поддержки."
-        else:
-            sources = [Source(question=hits[0].question, url=hits[0].url, relevance=round(hits[0].relevance, 3))]
-            if best >= settings.direct_answer_relevance:
-                answer = hits[0].answer
-            else:
-                context = "\n\n".join(
-                    f"FAQ {i + 1}\nВопрос: {h.question}\nОтвет: {h.answer}"
-                    for i, h in enumerate(hits)
-                )
-                answer = await ollama.chat(
-                    SYSTEM_PROMPT,
-                    f"КОНТЕКСТ FAQ:\n{context}\n\nВОПРОС ПОЛЬЗОВАТЕЛЯ:\n{resolved_message}",
-                )
-                if answer_has_no_evidence(answer):
-                    sources = []
+        answer, sources = await resolve_knowledge(resolved_message)
 
     latency = round((time.perf_counter() - started) * 1000)
     await conversations.add(session_id, message, answer, context=resolved_message)
@@ -158,7 +166,6 @@ async def chat_stream(body: ChatRequest) -> StreamingResponse:
         sources: list[Source] = []
         links: list[ActionLink] = []
         answer = fixed_answer(message)
-        model_user: str | None = None
         try:
             download = await resolve_download(resolved_message, message) if answer is None else None
             if download is not None:
@@ -166,43 +173,15 @@ async def chat_stream(body: ChatRequest) -> StreamingResponse:
                 links = [ActionLink(label=action.label, url=action.url) for action in actions]
                 sources = [Source(question=DOWNLOAD_SOURCE.question, url=DOWNLOAD_SOURCE.url, relevance=1.0)]
 
-            if answer is None and not likely_in_domain(resolved_message):
-                answer = OFF_TOPIC
-
             if answer is None:
-                hits = await kb.search(resolved_message)
-                best = hits[0].relevance if hits else 0
-                if not hits or best < settings.min_relevance:
-                    answer = "В базе знаний Lime HD TV нет точного ответа на этот вопрос. Пожалуйста, обратитесь в службу поддержки."
-                else:
-                    relevant_hits = hits[:1]
-                    sources = [
-                        Source(question=hit.question, url=hit.url, relevance=round(hit.relevance, 3))
-                        for hit in relevant_hits
-                    ]
-                    if best >= settings.direct_answer_relevance:
-                        answer = hits[0].answer
-                    else:
-                        context = "\n\n".join(
-                            f"FAQ {i + 1}\nВопрос: {hit.question}\nОтвет: {hit.answer}"
-                            for i, hit in enumerate(hits)
-                        )
-                        model_user = f"КОНТЕКСТ FAQ:\n{context}\n\nВОПРОС ПОЛЬЗОВАТЕЛЯ:\n{resolved_message}"
+                answer, sources = await resolve_knowledge(resolved_message)
 
             yield event({"type": "meta", "session_id": session_id})
             parts: list[str] = []
-            if model_user is not None:
-                async for chunk in ollama.chat_stream(SYSTEM_PROMPT, model_user):
-                    parts.append(chunk)
-                    yield event({"type": "chunk", "content": chunk})
-                answer = "".join(parts).strip()
-                if answer_has_no_evidence(answer):
-                    sources = []
-            else:
-                for chunk in re.findall(r"\S+\s*|\s+", answer or ""):
-                    parts.append(chunk)
-                    yield event({"type": "chunk", "content": chunk})
-                    await asyncio.sleep(0.012)
+            for chunk in re.findall(r"\S+\s*|\s+", answer or ""):
+                parts.append(chunk)
+                yield event({"type": "chunk", "content": chunk})
+                await asyncio.sleep(0.012)
 
             if not answer:
                 answer = "Не удалось сформировать ответ. Пожалуйста, попробуйте ещё раз."

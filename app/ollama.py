@@ -66,6 +66,40 @@ class OllamaClient:
                     if content:
                         yield content
 
+    async def faq_route(self, question: str, faq_question: str, faq_answer: str) -> str:
+        system = (
+            "Распредели вопрос пользователя ровно в одну категорию. "
+            "MATCH — статья FAQ помогает решить описанную ситуацию, включая синонимы, "
+            "разговорные формулировки и условные решения. "
+            "SUPPORT — вопрос относится к Lime HD TV, приложению, каналам, аккаунту, оплате, "
+            "подписке или настройкам, но данная статья не даёт подходящего решения. "
+            "OFFTOPIC — вопрос не относится к сервису Lime HD TV, например вычисления, погода, "
+            "написание кода или общие знания. "
+            "Ответь только MATCH, SUPPORT или OFFTOPIC."
+        )
+        user = f"ВОПРОС ПОЛЬЗОВАТЕЛЯ:\n{question}\n\nСТАТЬЯ FAQ:\n{faq_question}\n{faq_answer}"
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(
+                f"{self.base_url}/api/chat",
+                json={
+                    "model": settings.ollama_chat_model,
+                    "stream": False,
+                    "think": False,
+                    "keep_alive": "10m",
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user},
+                    ],
+                    "options": {"temperature": 0, "num_predict": 12},
+                },
+            )
+            response.raise_for_status()
+            answer = response.json()["message"]["content"].strip().upper()
+            for route in ("MATCH", "SUPPORT", "OFFTOPIC"):
+                if route in answer:
+                    return route
+            return "SUPPORT"
+
     async def available(self) -> bool:
         try:
             async with httpx.AsyncClient(timeout=2) as client:

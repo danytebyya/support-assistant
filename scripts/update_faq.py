@@ -63,9 +63,8 @@ def main() -> None:
     temporary = OUTPUT.with_suffix(".tmp")
     temporary.write_text(json.dumps(items, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     temporary.replace(OUTPUT)
-    print(f"Saved {len(items)} FAQ entries to {OUTPUT}. Run `make reindex` next.")
+    print(f"Saved {len(items)} FAQ entries to {OUTPUT}.")
 
 
 if __name__ == "__main__":
     main()
-
