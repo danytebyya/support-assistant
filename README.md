@@ -59,6 +59,7 @@ API и создают индекс базы знаний. На macOS Ollama со
     onboarding: true,
     icons: {
       chat: "/widget/assets/chat.svg",
+      edit: "/widget/assets/edit.svg",
       send: "/widget/assets/send.svg",
       close: "/widget/assets/close.svg",
       logo: "/widget/assets/logo.png"

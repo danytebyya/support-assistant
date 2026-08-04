@@ -15,6 +15,7 @@ FOLLOW_UP_RE = re.compile(
 class Turn:
     user: str
     assistant: str
+    context: str
 
 
 def expand_follow_up(message: str, previous_user: str | None) -> str:
@@ -40,10 +41,10 @@ class ConversationStore:
             if time.monotonic() - updated_at > self.ttl_seconds:
                 self._sessions.pop(session_id, None)
                 return None
-            return turns[-1].user if turns else None
+            return turns[-1].context if turns else None
 
-    async def add(self, session_id: str, user: str, assistant: str) -> None:
+    async def add(self, session_id: str, user: str, assistant: str, context: str | None = None) -> None:
         async with self._lock:
             turns = list(self._sessions.get(session_id, (0.0, []))[1])
-            turns.append(Turn(user=user, assistant=assistant))
+            turns.append(Turn(user=user, assistant=assistant, context=context or user))
             self._sessions[session_id] = (time.monotonic(), turns[-self.max_turns:])

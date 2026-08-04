@@ -20,15 +20,6 @@ class SemanticIntentRouter:
         "пользователь сообщает о проблеме или ошибке в работе приложения",
     )
     POSITIVE_INTENT_COUNT = 2
-    PLATFORM_REFERENCES = {
-        "ios": "скачать приложение для iPhone iPad iOS через App Store",
-        "android": "скачать приложение для телефона Android через Google Play",
-        "android_tv": "скачать приложение для Android TV или приставки",
-        "windows": "скачать приложение для компьютера Windows",
-        "smart_tv": "установить приложение на Smart TV телевизор LG Samsung",
-        "huawei": "скачать приложение для телефона Huawei через AppGallery",
-    }
-
     def __init__(self, ollama: OllamaClient) -> None:
         self.ollama = ollama
         self._reference_embeddings: list[list[float]] | None = None
@@ -44,8 +35,7 @@ class SemanticIntentRouter:
         if self._reference_embeddings is None:
             async with self._lock:
                 if self._reference_embeddings is None:
-                    texts = [*self.INTENT_REFERENCES, *self.PLATFORM_REFERENCES.values()]
-                    self._reference_embeddings = await self.ollama.embed(texts)
+                    self._reference_embeddings = await self.ollama.embed(list(self.INTENT_REFERENCES))
         return self._reference_embeddings
 
     async def download_intent(self, message: str) -> DownloadIntent | None:
@@ -58,10 +48,4 @@ class SemanticIntentRouter:
         if download_score < 0.34 or download_score <= negative_score:
             return None
 
-        platform_names = list(self.PLATFORM_REFERENCES)
-        platform_scores = [self._cosine(query, item) for item in references[intent_count:]]
-        ranked = sorted(enumerate(platform_scores), key=lambda item: item[1], reverse=True)
-        platform: str | None = None
-        if ranked and (len(ranked) == 1 or ranked[0][1] >= ranked[1][1] + 0.01):
-            platform = platform_names[ranked[0][0]]
-        return DownloadIntent(platform=platform, confidence=download_score)
+        return DownloadIntent(platform=None, confidence=download_score)

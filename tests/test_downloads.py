@@ -1,4 +1,4 @@
-from app.downloads import DOWNLOAD_SOURCE, download_answer
+from app.downloads import DOWNLOAD_SOURCE, detect_platform, download_answer
 
 
 def test_ios_download_link():
@@ -51,3 +51,9 @@ def test_semantic_router_can_force_platform_after_typo_detection():
     )
     assert "App Store" in answer
     assert links[0].url == "https://apps.apple.com/app/id998832333"
+
+
+def test_platform_detection_tolerates_typos_without_guessing_when_absent():
+    assert detect_platform("а для айфно?") == "ios"
+    assert detect_platform("а для виндоус?") == "windows"
+    assert detect_platform("существует приложение Lime HD?") is None

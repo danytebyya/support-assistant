@@ -1,5 +1,6 @@
 import re
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,41 @@ SMART_TV_RE = re.compile(r"smart\s*tv|смарт\s*тв|телевизор|samsu
 HUAWEI_RE = re.compile(r"huawei|хуавей|appgallery|аппгалер", re.I)
 RUSTORE_RE = re.compile(r"rustore|рустор", re.I)
 
+PLATFORM_ALIASES = {
+    "ios": ("iphone", "ipad", "ios", "айфон", "айпад"),
+    "android_tv": ("androidtv", "андроидтв", "приставка"),
+    "windows": ("windows", "виндовс", "виндоус", "винды"),
+    "smart_tv": ("smarttv", "смарттв", "телевизор", "samsung", "самсунг"),
+    "huawei": ("huawei", "хуавей", "appgallery", "аппгалери"),
+    "android": ("android", "андроид"),
+}
+
+
+def detect_platform(message: str) -> str | None:
+    text = " ".join(message.lower().split())
+    if IOS_RE.search(text):
+        return "ios"
+    if ANDROID_TV_RE.search(text):
+        return "android_tv"
+    if WINDOWS_RE.search(text):
+        return "windows"
+    if SMART_TV_RE.search(text):
+        return "smart_tv"
+    if HUAWEI_RE.search(text):
+        return "huawei"
+    if ANDROID_RE.search(text):
+        return "android"
+
+    tokens = re.findall(r"[a-zа-яё0-9]+", text)
+    best: tuple[float, str | None] = (0.0, None)
+    for platform, aliases in PLATFORM_ALIASES.items():
+        for token in tokens:
+            for alias in aliases:
+                score = SequenceMatcher(None, token, alias).ratio()
+                if score > best[0]:
+                    best = (score, platform)
+    return best[1] if best[0] >= 0.72 else None
+
 
 def download_answer(
     message: str, *, assume_download: bool = False, platform_hint: str | None = None
@@ -41,39 +77,41 @@ def download_answer(
     if not assume_download and not DOWNLOAD_RE.search(text):
         return None
 
-    if platform_hint == "ios" or IOS_RE.search(text):
+    platform = platform_hint or detect_platform(text)
+
+    if platform == "ios":
         return (
             "Скачать Lime HD TV для iPhone или iPad можно в App Store. Нажмите кнопку ниже — откроется официальная страница приложения.",
             [DownloadAction("Открыть в App Store", "https://apps.apple.com/app/id998832333")],
         )
     if RUSTORE_RE.search(text):
-        package = "tv.limehd.stb" if ANDROID_TV_RE.search(text) else "com.infolink.limeiptv"
-        title = "Лайм HD STB" if ANDROID_TV_RE.search(text) else "Lime HD TV"
+        package = "tv.limehd.stb" if platform == "android_tv" else "com.infolink.limeiptv"
+        title = "Лайм HD STB" if platform == "android_tv" else "Lime HD TV"
         return (
             f"{title} доступен в RuStore. Нажмите кнопку ниже — откроется официальная карточка приложения.",
             [DownloadAction("Открыть в RuStore", f"https://www.rustore.ru/catalog/app/{package}")],
         )
-    if platform_hint == "android_tv" or ANDROID_TV_RE.search(text):
+    if platform == "android_tv":
         return (
             "Для Android TV и приставок доступна отдельная версия Lime HD TV с управлением с пульта.",
             [DownloadAction("Открыть в Google Play", "https://play.google.com/store/apps/details?id=tv.limehd.stb")],
         )
-    if platform_hint == "windows" or WINDOWS_RE.search(text):
+    if platform == "windows":
         return (
             "Версию Lime HD TV для Windows можно скачать на официальной странице. Там находится актуальный установщик.",
             [DownloadAction("Скачать для Windows", "https://play.limehd.tv/limewin")],
         )
-    if platform_hint == "smart_tv" or SMART_TV_RE.search(text):
+    if platform == "smart_tv":
         return (
             "Способ установки зависит от модели телевизора. На официальной странице выберите производителя и следуйте инструкции.",
             [DownloadAction("Открыть инструкции для Smart TV", "https://limehd.tv/instructions")],
         )
-    if platform_hint == "huawei" or HUAWEI_RE.search(text):
+    if platform == "huawei":
         return (
             "Откройте официальную страницу Lime HD TV для Android — на ней доступен актуальный вариант установки приложения.",
             [DownloadAction("Открыть страницу загрузки", "https://play.limehd.tv/limehd")],
         )
-    if platform_hint == "android" or ANDROID_RE.search(text):
+    if platform == "android":
         return (
             "Скачать Lime HD TV для телефона или планшета Android можно в Google Play.",
             [DownloadAction("Открыть в Google Play", "https://play.google.com/store/apps/details?id=com.infolink.limeiptv")],

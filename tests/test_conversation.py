@@ -22,3 +22,12 @@ def test_store_remembers_latest_user_turn():
         return await store.last_user("session")
 
     assert asyncio.run(scenario()) == "второй вопрос"
+
+
+def test_store_remembers_accumulated_context():
+    async def scenario():
+        store = ConversationStore()
+        await store.add("session", "а для айфона?", "ответ", context="исходная тема + айфон")
+        return await store.last_user("session")
+
+    assert asyncio.run(scenario()) == "исходная тема + айфон"

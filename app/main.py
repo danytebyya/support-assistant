@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.conversation import ConversationStore, expand_follow_up
-from app.downloads import DOWNLOAD_SOURCE, download_answer
+from app.downloads import DOWNLOAD_SOURCE, detect_platform, download_answer
 from app.guardrails import OFF_TOPIC, SYSTEM_PROMPT, fixed_answer, likely_in_domain
 from app.intent_router import SemanticIntentRouter
 from app.logger import log_exchange
@@ -29,14 +29,18 @@ intent_router = SemanticIntentRouter(ollama)
 conversations = ConversationStore()
 
 
-async def resolve_download(message: str):
-    result = download_answer(message)
+async def resolve_download(message: str, latest_message: str):
+    result = download_answer(latest_message)
     if result is not None:
         return result
     intent = await intent_router.download_intent(message)
     if intent is None:
         return None
-    return download_answer(message, assume_download=True, platform_hint=intent.platform)
+    return download_answer(
+        latest_message,
+        assume_download=True,
+        platform_hint=detect_platform(latest_message),
+    )
 
 
 def answer_has_no_evidence(answer: str) -> bool:
@@ -90,7 +94,7 @@ async def answer_request(body: ChatRequest) -> ChatResponse:
     sources: list[Source] = []
     links: list[ActionLink] = []
 
-    download = await resolve_download(resolved_message) if answer is None else None
+    download = await resolve_download(resolved_message, message) if answer is None else None
     if download is not None:
         answer, actions = download
         links = [ActionLink(label=action.label, url=action.url) for action in actions]
@@ -121,7 +125,7 @@ async def answer_request(body: ChatRequest) -> ChatResponse:
                     sources = []
 
     latency = round((time.perf_counter() - started) * 1000)
-    await conversations.add(session_id, message, answer)
+    await conversations.add(session_id, message, answer, context=resolved_message)
     await log_exchange(session_id=session_id, question=message, answer=answer, latency_ms=latency)
     return ChatResponse(answer=answer, session_id=session_id, sources=sources, links=links, latency_ms=latency)
 
@@ -156,7 +160,7 @@ async def chat_stream(body: ChatRequest) -> StreamingResponse:
         answer = fixed_answer(message)
         model_user: str | None = None
         try:
-            download = await resolve_download(resolved_message) if answer is None else None
+            download = await resolve_download(resolved_message, message) if answer is None else None
             if download is not None:
                 answer, actions = download
                 links = [ActionLink(label=action.label, url=action.url) for action in actions]
@@ -203,7 +207,7 @@ async def chat_stream(body: ChatRequest) -> StreamingResponse:
             if not answer:
                 answer = "Не удалось сформировать ответ. Пожалуйста, попробуйте ещё раз."
             latency = round((time.perf_counter() - started) * 1000)
-            await conversations.add(session_id, message, answer)
+            await conversations.add(session_id, message, answer, context=resolved_message)
             await log_exchange(session_id=session_id, question=message, answer=answer, latency_ms=latency)
             yield event({
                 "type": "done",
