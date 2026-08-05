@@ -521,9 +521,11 @@ textarea:focus {
 @media (max-width: 768px) {
   .panel {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
     width: 100vw;
-    height: 100dvh;
+    height: var(--chat-height, 100dvh);
     max-height: none;
     border: 0;
     border-radius: 0;
@@ -535,6 +537,9 @@ textarea:focus {
     transition: opacity 0.22s ease, visibility 0s linear 0.22s;
     overscroll-behavior: contain;
     touch-action: none;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
   .panel.open {
@@ -565,6 +570,8 @@ textarea:focus {
 
   .messages {
     flex: 1;
+    min-height: 0;
+    overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y;
