@@ -463,6 +463,7 @@ textarea:focus {
   color: #132019;
   box-shadow: var(--coach-shadow);
   z-index: 2147483647;
+  opacity: 1;
 }
 
 .coach:after {
@@ -514,6 +515,7 @@ textarea:focus {
   inset: 0;
   background: #09140c66;
   z-index: 2147483645;
+  opacity: 1;
 }
 
 @media (max-width: 768px) {
