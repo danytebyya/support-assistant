@@ -1,11 +1,13 @@
 import asyncio
 import json
+import time
 from dataclasses import dataclass
 
 import chromadb
 from chromadb.errors import NotFoundError
 
 from app.config import settings
+from app.logger import logger
 from app.ollama import OllamaClient
 
 
@@ -36,6 +38,7 @@ class KnowledgeBase:
 
     async def rebuild(self) -> int:
         async with self._rebuild_lock:
+            logger.info(f"[Chroma] Rebuilding KnowledgeBase index from {settings.safe_knowledge_path}...")
             items = json.loads(settings.safe_knowledge_path.read_text(encoding="utf-8"))
             if not isinstance(items, list) or not items:
                 raise ValueError("Knowledge base must be a non-empty JSON array")
@@ -57,10 +60,14 @@ class KnowledgeBase:
                     "url": x.get("url", "https://limehd.tv/faq/0")
                 } for x in items],
             )
+            logger.info(f"[Chroma] Successfully indexed {len(items)} document(s) in vector DB.")
             return len(items)
 
     async def search(self, query: str, limit: int | None = None) -> list[Hit]:
+        t0 = time.perf_counter()
+        logger.info(f"[Chroma] Searching KnowledgeBase for query: '{query[:60]}...'")
         if self.count == 0:
+            logger.info("[Chroma] KnowledgeBase collection is empty, triggering auto-rebuild...")
             await self.rebuild()
         embedding = (await self.ollama.embed([query]))[0]
         result = self._collection().query(
@@ -70,4 +77,6 @@ class KnowledgeBase:
         for meta, distance in zip(result["metadatas"][0], result["distances"][0]):
             relevance = max(0.0, 1.0 - float(distance))
             hits.append(Hit(meta["question"], meta["answer"], meta["url"], relevance))
+        top_rel = round(hits[0].relevance, 3) if hits else 0.0
+        logger.info(f"[Chroma] Search finished in {round((time.perf_counter() - t0) * 1000)}ms -> found {len(hits)} hit(s), top relevance: {top_rel}")
         return hits

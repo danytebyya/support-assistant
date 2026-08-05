@@ -1,9 +1,18 @@
 import asyncio
 import json
+import logging
 import re
+import sys
 from datetime import datetime, timezone
 
 from app.config import settings
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+logger = logging.getLogger("lime_ai")
 
 _lock = asyncio.Lock()
 
