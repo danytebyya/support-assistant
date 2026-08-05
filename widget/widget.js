@@ -154,6 +154,7 @@
           if(!headerActions.some(button=>button.matches(":hover"))) chatHeader.classList.remove("tooltips-warm");
         },160);
       });
+    });
     const updateViewport = () => {
       if (!state.ui?.panel || window.innerWidth > 768) return;
       if (window.visualViewport && state.ui.panel.classList.contains("open")) {
