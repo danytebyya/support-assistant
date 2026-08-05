@@ -85,3 +85,11 @@ def test_phone_usage_request_detected():
     assert detect_platform("я могу пользоваться с телефона?") == "android"
     answer, links = download_answer("я могу пользоваться с телефона?")
     assert "Google Play" in links[0].label or "Android" in answer
+
+
+def test_iphone_app_existence_request_detected():
+    assert is_download_request("есть ли приложение на айфон?")
+    assert detect_platform("есть ли приложение на айфон?") == "ios"
+    answer, links = download_answer("есть ли приложение на айфон?")
+    assert "App Store" in answer
+    assert any("App Store" in link.label for link in links)
