@@ -14,6 +14,11 @@ def test_independent_question_is_not_rewritten():
     assert expand_follow_up(message, "Где скачать приложение?") == message
 
 
+def test_conjunction_a_question_is_not_rewritten():
+    message = "а я могу пользоваться приложением с телеефона?"
+    assert expand_follow_up(message, "что такое 480p?") == message
+
+
 def test_store_remembers_latest_user_turn():
     async def scenario():
         store = ConversationStore()

@@ -23,14 +23,15 @@ DOWNLOAD_SOURCE = DownloadSource(
 
 DOWNLOAD_RE = re.compile(
     r"ссылк\w*|\b(?:скачать|установить|загрузить)\b|"
-    r"(?:дай|пришли|покажи|нужна|где).{0,30}(?:магазин|маркет)",
+    r"(?:дай|пришли|покажи|нужна|где).{0,30}(?:магазин|маркет)|"
+    r"(?:на|с)\s+(?:телефон\w*|смартфон\w*|мобильн\w*)",
     re.I,
 )
 DOWNLOAD_ALIASES = ("скачать", "установить", "загрузить", "ссылка", "магазин", "маркет")
 DOWNLOAD_FUZZY_THRESHOLD = 0.82
 IOS_RE = re.compile(r"\b(?:ios|iphone|ipad|app\s*store)\b|айфон|айпад|эпп\s*стор", re.I)
 ANDROID_TV_RE = re.compile(r"android\s*tv|андроид\s*тв|приставк", re.I)
-ANDROID_RE = re.compile(r"\bandroid\b|андроид|google\s*play|гугл\s*плей", re.I)
+ANDROID_RE = re.compile(r"\bandroid\b|андроид|google\s*play|гугл\s*плей|телефон|смартфон|мобильн", re.I)
 WINDOWS_RE = re.compile(r"\bwindows\b|виндовс|компьютер|ноутбук|\bpc\b", re.I)
 SMART_TV_RE = re.compile(r"smart\s*tv|смарт\s*тв|телевизор|samsung|самсунг|\blg\b", re.I)
 HUAWEI_RE = re.compile(r"huawei|хуавей|appgallery|аппгалер", re.I)
@@ -42,7 +43,7 @@ PLATFORM_ALIASES = {
     "windows": ("windows", "виндовс", "виндоус", "винды"),
     "smart_tv": ("smarttv", "смарттв", "телевизор", "samsung", "самсунг"),
     "huawei": ("huawei", "хуавей", "appgallery", "аппгалери"),
-    "android": ("android", "андроид"),
+    "android": ("android", "андроид", "телефон", "смартфон"),
 }
 
 

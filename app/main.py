@@ -49,8 +49,11 @@ async def resolve_download(message: str, latest_message: str):
     return None
 
 
-async def resolve_knowledge(message: str) -> tuple[str, list[Source]]:
-    hits = await kb.search(message)
+async def resolve_knowledge(message: str, raw_message: str | None = None) -> tuple[str, list[Source]]:
+    query = raw_message or message
+    hits = await kb.search(query)
+    if not hits and raw_message and raw_message != message:
+        hits = await kb.search(message)
     if not hits:
         return NO_EXACT_ANSWER, []
 
@@ -140,7 +143,7 @@ async def answer_request(body: ChatRequest) -> ChatResponse:
         sources = [Source(question=DOWNLOAD_SOURCE.question, url=DOWNLOAD_SOURCE.url, relevance=1.0)]
 
     if answer is None:
-        answer, sources = await resolve_knowledge(resolved_message)
+        answer, sources = await resolve_knowledge(resolved_message, raw_message=message)
 
     latency = round((time.perf_counter() - started) * 1000)
     await conversations.add(session_id, message, answer, context=resolved_message)
@@ -184,7 +187,7 @@ async def chat_stream(body: ChatRequest) -> StreamingResponse:
                 sources = [Source(question=DOWNLOAD_SOURCE.question, url=DOWNLOAD_SOURCE.url, relevance=1.0)]
 
             if answer is None:
-                answer, sources = await resolve_knowledge(resolved_message)
+                answer, sources = await resolve_knowledge(resolved_message, raw_message=message)
 
             yield event({"type": "meta", "session_id": session_id})
             parts: list[str] = []

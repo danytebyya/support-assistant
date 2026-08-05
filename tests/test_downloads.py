@@ -78,3 +78,10 @@ def test_platform_detection_tolerates_typos_without_guessing_when_absent():
     assert detect_platform("а для айфно?") == "ios"
     assert detect_platform("а для виндоус?") == "windows"
     assert detect_platform("существует приложение Lime HD?") is None
+
+
+def test_phone_usage_request_detected():
+    assert is_download_request("я могу пользоваться с телефона?")
+    assert detect_platform("я могу пользоваться с телефона?") == "android"
+    answer, links = download_answer("я могу пользоваться с телефона?")
+    assert "Google Play" in links[0].label or "Android" in answer
