@@ -157,6 +157,12 @@
         },160);
       });
     });
+    try {
+      const meta = document.querySelector('meta[name="viewport"]');
+      if (meta && !meta.content.includes("interactive-widget")) {
+        meta.content += ", interactive-widget=resizes-content";
+      }
+    } catch (_) {}
     let savedScrollY = 0;
     const updateViewport = () => {
       if (!state.ui?.panel || window.innerWidth > 768) return;
@@ -165,6 +171,9 @@
           const vv = window.visualViewport;
           const isKeyboardOpen = vv.height < window.innerHeight - 30;
           if (isKeyboardOpen) {
+            if (window.scrollY !== savedScrollY) {
+              window.scrollTo(0, savedScrollY);
+            }
             state.ui.panel.style.height = `${vv.height}px`;
             state.ui.panel.style.top = `${vv.offsetTop}px`;
             state.ui.panel.style.bottom = "auto";
