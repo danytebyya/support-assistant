@@ -11,4 +11,7 @@ docs/evaluation-results.json
 *.pyc
 *.pyo
 .DS_Store
-
+DEPLOY.md
+implementation_plan.md
+task.md
+walkthrough.md

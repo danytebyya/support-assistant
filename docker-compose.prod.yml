@@ -1,0 +1,89 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - support-network
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      TRUST_PROXY: "true"
+    volumes:
+      - support_data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - support-network
+    restart: unless-stopped
+
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    pull_policy: if_not_present
+    volumes:
+      - support_ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - support-network
+    restart: unless-stopped
+
+  model-init:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    pull_policy: if_not_present
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        pull_with_retry() {
+          model="$$1"
+          attempt=1
+          while [ "$$attempt" -le 5 ]; do
+            ollama pull "$$model" && return 0
+            echo "Retry $$attempt/5 for $$model in 10 seconds..."
+            attempt=$$((attempt + 1))
+            sleep 10
+          done
+          return 1
+        }
+        pull_with_retry ${OLLAMA_EMBED_MODEL:-qwen3-embedding:0.6b}
+        pull_with_retry ${OLLAMA_CHAT_MODEL:-qwen3:8b}
+    networks:
+      - support-network
+    restart: "no"
+
+networks:
+  support-network:
+    driver: bridge
+
+volumes:
+  support_data:
+  support_ollama_data:
