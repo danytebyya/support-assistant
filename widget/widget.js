@@ -188,27 +188,25 @@
 
     const lockBodyScroll = () => {
       savedScrollY = window.scrollY || window.pageYOffset || 0;
-      document.body.style.position = "fixed";
-      document.body.style.top = `-${savedScrollY}px`;
-      document.body.style.left = "0";
-      document.body.style.right = "0";
-      document.body.style.width = "100%";
       document.body.style.overflow = "hidden";
       document.documentElement.style.overflow = "hidden";
     };
 
     const unlockBodyScroll = () => {
-      if (document.body.style.position === "fixed") {
-        document.body.style.position = "";
-        document.body.style.top = "";
-        document.body.style.left = "";
-        document.body.style.right = "";
-        document.body.style.width = "";
-        document.body.style.overflow = "";
-        document.documentElement.style.overflow = "";
-        window.scrollTo(0, savedScrollY);
-      }
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+      window.scrollTo(0, savedScrollY);
     };
+
+    document.addEventListener("touchmove", (e) => {
+      if (state.ui?.panel?.classList.contains("open") && window.innerWidth <= 768) {
+        const messages = state.ui.messages;
+        if (messages && (messages === e.target || messages.contains(e.target))) {
+          return;
+        }
+        e.preventDefault();
+      }
+    }, { passive: false });
 
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", () => updateViewportHeight());
