@@ -63,8 +63,11 @@ async def resolve_knowledge(message: str, raw_message: str | None = None) -> tup
         return top.answer, [source]
 
     saw_support = False
-    for candidate in hits:
-        route = await ollama.faq_route(message, candidate.question, candidate.answer)
+    routes = await asyncio.gather(*[
+        ollama.faq_route(message, candidate.question, candidate.answer)
+        for candidate in hits
+    ])
+    for candidate, route in zip(hits, routes):
         if route == "MATCH":
             source = Source(
                 question=candidate.question,

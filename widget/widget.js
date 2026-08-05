@@ -17,7 +17,9 @@
     const messages=state.ui?.messages;
     if(!messages) return;
     messages.scrollTop=messages.scrollHeight;
-    requestAnimationFrame(()=>{messages.scrollTop=messages.scrollHeight});
+    requestAnimationFrame(()=>{if(messages) messages.scrollTop=messages.scrollHeight});
+    setTimeout(()=>{if(messages) messages.scrollTop=messages.scrollHeight},60);
+    setTimeout(()=>{if(messages) messages.scrollTop=messages.scrollHeight},180);
   }
   function iconMarkup(name) {
     const source=state.config.icons?.[name];
@@ -159,8 +161,14 @@
       if (!state.ui?.panel || window.innerWidth > 768) return;
       if (window.visualViewport && state.ui.panel.classList.contains("open")) {
         const vv = window.visualViewport;
-        state.ui.panel.style.height = `${vv.height}px`;
-        state.ui.panel.style.top = `${vv.offsetTop}px`;
+        const isKeyboardOpen = vv.height < window.innerHeight - 30;
+        if (isKeyboardOpen) {
+          state.ui.panel.style.height = `${vv.height}px`;
+          state.ui.panel.style.top = `${vv.offsetTop}px`;
+        } else {
+          state.ui.panel.style.height = "";
+          state.ui.panel.style.top = "";
+        }
         scrollToBottom();
       }
     };
@@ -168,6 +176,7 @@
       if (!state.ui?.panel) return;
       state.ui.panel.style.height = "";
       state.ui.panel.style.top = "";
+      scrollToBottom();
     };
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", updateViewport);
