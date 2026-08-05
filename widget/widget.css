@@ -520,6 +520,7 @@ textarea:focus {
 
 @media (max-width: 768px) {
   .panel {
+    position: fixed;
     inset: 0;
     width: 100vw;
     height: 100dvh;
@@ -528,6 +529,8 @@ textarea:focus {
     clip-path: inset(0);
     transform: scale(0.08);
     transform-origin: calc(100% - 45px) calc(100% - 45px);
+    overscroll-behavior: contain;
+    touch-action: none;
   }
 
   .panel.open {
@@ -548,7 +551,29 @@ textarea:focus {
   }
 
   header {
+    flex-shrink: 0;
     padding-top: max(18px, env(safe-area-inset-top));
+  }
+
+  .messages {
+    flex: 1;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+
+  form {
+    flex-shrink: 0;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+
+  textarea {
+    font-size: 16px;
+  }
+
+  .note {
+    flex-shrink: 0;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
   }
 }
 

@@ -152,13 +152,45 @@
           if(!headerActions.some(button=>button.matches(":hover"))) chatHeader.classList.remove("tooltips-warm");
         },160);
       });
-    });
-    const toggle=()=>{const open=state.ui.panel.classList.toggle("open");state.ui.panel.setAttribute("aria-hidden",String(!open));fab.setAttribute("aria-expanded",String(open));if(open)state.ui.input.focus()};
-    fab.onclick=()=>{dismissCoach(root);toggle()}; root.querySelector(".x").onclick=toggle;
-    root.querySelector(".new-chat").onclick=()=>{reset();state.ui.input.focus()};
-    root.querySelector("form").onsubmit=e=>{e.preventDefault();const value=state.ui.input.value;state.ui.input.value="";resizeInput();send(value)};
-    state.ui.input.oninput=resizeInput;
-    state.ui.input.onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();root.querySelector("form").requestSubmit();}};
+    const updateViewport = () => {
+      if (!state.ui?.panel || window.innerWidth > 768) return;
+      if (window.visualViewport && state.ui.panel.classList.contains("open")) {
+        const vv = window.visualViewport;
+        state.ui.panel.style.height = `${vv.height}px`;
+        state.ui.panel.style.top = `${vv.offsetTop}px`;
+        scrollToBottom();
+      }
+    };
+    const resetViewport = () => {
+      if (!state.ui?.panel) return;
+      state.ui.panel.style.height = "";
+      state.ui.panel.style.top = "";
+    };
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", updateViewport);
+      window.visualViewport.addEventListener("scroll", updateViewport);
+    }
+    const toggle = () => {
+      const open = state.ui.panel.classList.toggle("open");
+      state.ui.panel.setAttribute("aria-hidden", String(!open));
+      fab.setAttribute("aria-expanded", String(open));
+      if (open) {
+        if (window.innerWidth <= 768) {
+          document.body.style.overflow = "hidden";
+          updateViewport();
+        }
+        state.ui.input.focus();
+      } else {
+        document.body.style.overflow = "";
+        resetViewport();
+      }
+    };
+    fab.onclick = () => { dismissCoach(root); toggle(); }; root.querySelector(".x").onclick = toggle;
+    root.querySelector(".new-chat").onclick = () => { reset(); state.ui.input.focus(); };
+    root.querySelector("form").onsubmit = e => { e.preventDefault(); const value = state.ui.input.value; state.ui.input.value = ""; resizeInput(); send(value); };
+    state.ui.input.oninput = resizeInput;
+    state.ui.input.onfocus = () => { if (window.innerWidth <= 768) updateViewport(); };
+    state.ui.input.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); root.querySelector("form").requestSubmit(); } };
     showCoach(root);
   }
   global.LimeAI={init};
