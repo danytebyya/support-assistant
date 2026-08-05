@@ -22,6 +22,10 @@ services:
     profiles: ["docker-ollama"]
     ports:
       - "127.0.0.1:11434:11434"
+    environment:
+      OLLAMA_MAX_LOADED_MODELS: "2"
+      OLLAMA_NUM_PARALLEL: "2"
+      OLLAMA_KEEP_ALIVE: "24h"
     volumes:
       - ollama_data:/root/.ollama
     deploy:

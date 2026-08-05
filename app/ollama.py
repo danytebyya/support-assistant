@@ -110,7 +110,7 @@ class OllamaClient:
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
                 ],
-                "options": {"temperature": 0, "num_predict": 12},
+                "options": {"temperature": 0, "num_predict": 5},
             },
         )
         response.raise_for_status()

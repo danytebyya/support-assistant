@@ -62,12 +62,15 @@ async def resolve_knowledge(message: str, raw_message: str | None = None) -> tup
         source = Source(question=top.question, url=top.url, relevance=round(top.relevance, 3))
         return top.answer, [source]
 
+    valid_hits = [h for h in hits if h.relevance >= settings.min_relevance]
+    if not valid_hits:
+        if likely_in_domain(message):
+            return NO_EXACT_ANSWER, []
+        return OFF_TOPIC, []
+
     saw_support = False
-    routes = await asyncio.gather(*[
-        ollama.faq_route(message, candidate.question, candidate.answer)
-        for candidate in hits
-    ])
-    for candidate, route in zip(hits, routes):
+    for candidate in valid_hits:
+        route = await ollama.faq_route(message, candidate.question, candidate.answer)
         if route == "MATCH":
             source = Source(
                 question=candidate.question,
@@ -177,6 +180,9 @@ async def chat_stream(body: ChatRequest) -> StreamingResponse:
         started = time.perf_counter()
         message = " ".join(body.message.split())
         session_id = body.session_id or str(uuid.uuid4())
+
+        yield event({"type": "meta", "session_id": session_id})
+
         previous_user = await conversations.last_user(session_id)
         resolved_message = expand_follow_up(message, previous_user)
         sources: list[Source] = []
@@ -192,7 +198,6 @@ async def chat_stream(body: ChatRequest) -> StreamingResponse:
             if answer is None:
                 answer, sources = await resolve_knowledge(resolved_message, raw_message=message)
 
-            yield event({"type": "meta", "session_id": session_id})
             parts: list[str] = []
             for chunk in re.findall(r"\S+\s*|\s+", answer or ""):
                 parts.append(chunk)
@@ -215,7 +220,8 @@ async def chat_stream(body: ChatRequest) -> StreamingResponse:
             yield event({"type": "error", "detail": "Локальная AI-модель недоступна"})
         except httpx.TimeoutException:
             yield event({"type": "error", "detail": "Локальная AI-модель не успела ответить"})
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in chat_stream: {e}", exc_info=True)
             yield event({"type": "error", "detail": "Не удалось получить ответ"})
     return StreamingResponse(
         events(),

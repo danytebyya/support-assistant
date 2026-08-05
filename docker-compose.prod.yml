@@ -39,6 +39,10 @@ services:
   ollama:
     image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
     pull_policy: if_not_present
+    environment:
+      OLLAMA_MAX_LOADED_MODELS: "2"
+      OLLAMA_NUM_PARALLEL: "2"
+      OLLAMA_KEEP_ALIVE: "24h"
     volumes:
       - support_ollama_data:/root/.ollama
     healthcheck:
