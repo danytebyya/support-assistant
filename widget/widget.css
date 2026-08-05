@@ -534,7 +534,9 @@ textarea:focus {
   }
 
   .panel.open {
-    transform: scale(1);
+    transform: none;
+    transform-origin: center center;
+    transition: opacity 0.15s ease, visibility 0s;
     border-radius: 0;
     clip-path: inset(0);
   }
