@@ -158,19 +158,9 @@
       });
     });
     let savedScrollY = 0;
-    const handleWindowScroll = () => {
-      if (state.ui?.panel?.classList.contains("open") && window.innerWidth <= 768) {
-        if (window.scrollY !== savedScrollY) {
-          window.scrollTo(0, savedScrollY);
-        }
-      }
-    };
     const updateViewport = () => {
       if (!state.ui?.panel || window.innerWidth > 768) return;
       if (state.ui.panel.classList.contains("open")) {
-        if (window.scrollY !== savedScrollY) {
-          window.scrollTo(0, savedScrollY);
-        }
         if (window.visualViewport) {
           const vv = window.visualViewport;
           const isKeyboardOpen = vv.height < window.innerHeight - 30;
@@ -206,14 +196,13 @@
         if (window.innerWidth <= 768) {
           savedScrollY = window.scrollY || window.pageYOffset || 0;
           document.body.style.overflow = "hidden";
-          window.addEventListener("scroll", handleWindowScroll, { passive: true });
           updateViewport();
         } else {
           state.ui.input.focus();
         }
       } else {
-        window.removeEventListener("scroll", handleWindowScroll);
         document.body.style.overflow = "";
+        window.scrollTo(0, savedScrollY);
         resetViewport();
       }
     };
@@ -223,16 +212,12 @@
     state.ui.input.oninput = resizeInput;
     state.ui.input.onfocus = () => {
       if (window.innerWidth <= 768) {
-        window.scrollTo(0, savedScrollY);
         updateViewport();
       }
     };
     state.ui.input.onblur = () => {
       if (window.innerWidth <= 768) {
-        setTimeout(() => {
-          window.scrollTo(0, savedScrollY);
-          updateViewport();
-        }, 100);
+        setTimeout(updateViewport, 100);
       }
     };
     state.ui.input.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); root.querySelector("form").requestSubmit(); } };
