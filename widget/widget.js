@@ -17,6 +17,7 @@
     const messages=state.ui?.messages;
     if(!messages) return;
     messages.scrollTop=messages.scrollHeight;
+    requestAnimationFrame(()=>{if(messages) messages.scrollTop=messages.scrollHeight;});
   }
   function iconMarkup(name) {
     const source=state.config.icons?.[name];
@@ -163,7 +164,7 @@
     let savedScrollY = 0;
     let updateScheduled = false;
 
-    const updateViewportHeight = () => {
+    const updateViewportHeight = (forceScroll = false) => {
       if (updateScheduled) return;
       updateScheduled = true;
       requestAnimationFrame(() => {
@@ -172,9 +173,9 @@
         if (!state.ui.panel.classList.contains("open")) return;
 
         const messages = state.ui.messages;
-        const isNearBottom = messages
-          ? (messages.scrollHeight - messages.scrollTop - messages.clientHeight) < 80
-          : true;
+        const isNearBottom = forceScroll || (messages
+          ? (messages.scrollHeight - messages.scrollTop - messages.clientHeight) < 120
+          : true);
 
         const vvHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
         state.ui.panel.style.setProperty("--chat-height", `${vvHeight}px`);
@@ -210,10 +211,10 @@
     };
 
     if (window.visualViewport) {
-      window.visualViewport.addEventListener("resize", updateViewportHeight);
-      window.visualViewport.addEventListener("scroll", updateViewportHeight);
+      window.visualViewport.addEventListener("resize", () => updateViewportHeight());
+      window.visualViewport.addEventListener("scroll", () => updateViewportHeight());
     }
-    window.addEventListener("resize", updateViewportHeight);
+    window.addEventListener("resize", () => updateViewportHeight());
 
     const toggle = () => {
       const open = state.ui.panel.classList.toggle("open");
@@ -222,7 +223,7 @@
       if (open) {
         if (window.innerWidth <= 768) {
           lockBodyScroll();
-          updateViewportHeight();
+          updateViewportHeight(true);
         } else {
           state.ui.input.focus();
         }
@@ -240,7 +241,8 @@
     state.ui.input.oninput = resizeInput;
     state.ui.input.onfocus = () => {
       if (window.innerWidth <= 768) {
-        updateViewportHeight();
+        updateViewportHeight(true);
+        scrollToBottom();
       }
     };
     state.ui.input.onblur = () => {
