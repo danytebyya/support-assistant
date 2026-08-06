@@ -518,7 +518,25 @@ textarea:focus {
   opacity: 1;
 }
 
+.mobile-backdrop {
+  display: none;
+}
+
 @media (max-width: 768px) {
+  .panel.open ~ .mobile-backdrop {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    background: #ffffff;
+    z-index: 2147483645;
+  }
+
   .panel {
     position: fixed;
     top: 0;
@@ -542,6 +560,7 @@ textarea:focus {
     flex-direction: column;
     overflow: hidden;
     background: var(--surface, #ffffff);
+    z-index: 2147483646;
   }
 
   .panel.open {
@@ -625,6 +644,10 @@ textarea:focus {
 
   .coach-backdrop {
     background: #03060499;
+  }
+
+  .panel.open ~ .mobile-backdrop {
+    background: #000000;
   }
 }
 
