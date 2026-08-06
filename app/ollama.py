@@ -109,7 +109,7 @@ class OllamaClient:
             logger.error(f"[Ollama] Chat stream failed after {round((time.perf_counter() - t0) * 1000)}ms: {exc}")
             raise
 
-    async def faq_route(self, question: str, faq_question: str, faq_answer: str) -> str:
+    async def faq_route(self, question: str, faq_question: str, faq_answer: str, timeout: float = 5.0) -> str:
         t0 = time.perf_counter()
         clean_question = question.replace("---", "-").replace("===", "=").replace("```", "'''")
         system = (
@@ -125,19 +125,22 @@ class OllamaClient:
         logger.info(f"[RAG Route] Checking candidate FAQ: '{faq_question[:50]}...' for question: '{question[:50]}...'")
         try:
             client = await self.get_client()
-            response = await client.post(
-                f"{self.base_url}/api/chat",
-                json={
-                    "model": settings.ollama_chat_model,
-                    "stream": False,
-                    "think": False,
-                    "keep_alive": "10m",
-                    "messages": [
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": user},
-                    ],
-                    "options": {"temperature": 0, "num_predict": 5},
-                },
+            response = await asyncio.wait_for(
+                client.post(
+                    f"{self.base_url}/api/chat",
+                    json={
+                        "model": settings.ollama_chat_model,
+                        "stream": False,
+                        "think": False,
+                        "keep_alive": "10m",
+                        "messages": [
+                            {"role": "system", "content": system},
+                            {"role": "user", "content": user},
+                        ],
+                        "options": {"temperature": 0, "num_predict": 5},
+                    },
+                ),
+                timeout=timeout,
             )
             response.raise_for_status()
             answer = response.json()["message"]["content"].strip().upper()
@@ -148,6 +151,9 @@ class OllamaClient:
                     break
             logger.info(f"[RAG Route] Candidate '{faq_question[:50]}...' -> {route} ({round((time.perf_counter() - t0) * 1000)}ms)")
             return route
+        except asyncio.TimeoutError:
+            logger.warning(f"[RAG Route] Timeout ({timeout}s) for candidate '{faq_question[:50]}...'. Defaulting to SUPPORT.")
+            return "SUPPORT"
         except Exception as exc:
             logger.error(f"[RAG Route] Ollama call failed for candidate '{faq_question[:50]}...': {exc}")
             return "SUPPORT"

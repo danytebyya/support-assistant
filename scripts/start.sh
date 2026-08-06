@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CHAT_MODEL="${OLLAMA_CHAT_MODEL:-qwen3:8b}"
+CHAT_MODEL="${OLLAMA_CHAT_MODEL:-qwen2.5:3b}"
 EMBED_MODEL="${OLLAMA_EMBED_MODEL:-qwen3-embedding:0.6b}"
 MAC_DOWNLOAD_URL="${OLLAMA_MAC_DOWNLOAD_URL:-https://ollama.com/download/Ollama-darwin.zip}"
 DRY_RUN=false

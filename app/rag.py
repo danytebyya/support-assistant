@@ -42,7 +42,29 @@ class KnowledgeBase:
             items = json.loads(settings.safe_knowledge_path.read_text(encoding="utf-8"))
             if not isinstance(items, list) or not items:
                 raise ValueError("Knowledge base must be a non-empty JSON array")
-            docs = [f"Вопрос: {x['question']}\nОтвет: {x['answer']}" for x in items]
+
+            ids: list[str] = []
+            docs: list[str] = []
+            metadatas: list[dict] = []
+
+            for i, x in enumerate(items):
+                base_id = str(x.get("id", i))
+                meta = {
+                    "question": x["question"],
+                    "answer": x["answer"],
+                    "url": x.get("url", "https://limehd.tv/faq/0"),
+                }
+                # Main document: question + answer
+                ids.append(base_id)
+                docs.append(f"Вопрос: {x['question']}\nОтвет: {x['answer']}")
+                metadatas.append(meta)
+
+                # Variant documents: alternative user phrasings, same answer
+                for j, variant in enumerate(x.get("variants", [])):
+                    ids.append(f"{base_id}__v{j}")
+                    docs.append(variant)
+                    metadatas.append(meta)
+
             embeddings = await self.ollama.embed(docs)
             try:
                 self.client.delete_collection("lime_faq")
@@ -51,17 +73,14 @@ class KnowledgeBase:
             collection = self.client.create_collection(
                 "lime_faq", metadata={"hnsw:space": "cosine"}
             )
-            collection.add(
-                ids=[str(x.get("id", i)) for i, x in enumerate(items)],
-                documents=docs,
-                embeddings=embeddings,
-                metadatas=[{
-                    "question": x["question"], "answer": x["answer"],
-                    "url": x.get("url", "https://limehd.tv/faq/0")
-                } for x in items],
+            collection.add(ids=ids, documents=docs, embeddings=embeddings, metadatas=metadatas)
+            faq_count = len(items)
+            variant_count = len(docs) - faq_count
+            logger.info(
+                f"[Chroma] Successfully indexed {faq_count} FAQ item(s) "
+                f"+ {variant_count} variant(s) = {len(docs)} document(s) total."
             )
-            logger.info(f"[Chroma] Successfully indexed {len(items)} document(s) in vector DB.")
-            return len(items)
+            return faq_count
 
     async def search(self, query: str, limit: int | None = None) -> list[Hit]:
         t0 = time.perf_counter()

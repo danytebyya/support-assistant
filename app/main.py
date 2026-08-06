@@ -20,7 +20,7 @@ from app.downloads import (
     download_answer,
     is_download_platform_follow_up,
 )
-from app.guardrails import OFF_TOPIC, fixed_answer, likely_in_domain
+from app.guardrails import OFF_TOPIC, fixed_answer
 from app.logger import log_exchange, logger
 from app.ollama import OllamaClient
 from app.rag import KnowledgeBase
@@ -61,45 +61,31 @@ async def resolve_knowledge(message: str, raw_message: str | None = None) -> tup
         return NO_EXACT_ANSWER, []
 
     top = hits[0]
-    in_domain = likely_in_domain(message)
-    logger.info(f"[RAG] Top hit: '{top.question[:50]}...' with relevance {top.relevance:.3f} (in_domain={in_domain})")
+    logger.info(f"[RAG] Top hit: '{top.question[:50]}...' with relevance {top.relevance:.3f}")
 
-    # Fast off-topic check for non-domain queries with relevance < 0.80
-    if not in_domain and top.relevance < 0.80:
-        logger.info(f"[RAG] Out-of-domain query with relevance {top.relevance:.3f} < 0.80. Decision: OFF_TOPIC")
+    # Clear miss: relevance below minimum threshold — no LLM call needed
+    if top.relevance < settings.min_relevance:
+        logger.info(f"[RAG] Relevance {top.relevance:.3f} < min_relevance ({settings.min_relevance}). Decision: OFF_TOPIC")
         return OFF_TOPIC, []
 
-    # Direct match for domain questions
+    # Strong match: return answer directly without LLM call
     if top.relevance >= settings.direct_answer_relevance:
-        logger.info(f"[RAG] Direct match found: '{top.question[:50]}...'")
-        source = Source(question=top.question, url=top.url, relevance=round(top.relevance, 3))
-        return top.answer, [source]
+        logger.info(f"[RAG] Direct match (relevance {top.relevance:.3f}): '{top.question[:50]}...'")
+        return top.answer, [Source(question=top.question, url=top.url, relevance=round(top.relevance, 3))]
 
-    valid_hits = [h for h in hits if h.relevance >= settings.min_relevance]
-    if not valid_hits:
-        logger.info(f"[RAG] All hits below min_relevance ({settings.min_relevance}).")
-        if in_domain:
-            return NO_EXACT_ANSWER, []
+    # Uncertain zone: let faq_route LLM decide MATCH / SUPPORT / OFFTOPIC
+    logger.info(f"[RAG] Uncertain relevance {top.relevance:.3f} — delegating to faq_route...")
+    route = await ollama.faq_route(message, top.question, top.answer)
+    if route == "MATCH":
+        logger.info(f"[RAG] faq_route: MATCH '{top.question[:50]}...'")
+        return top.answer, [Source(question=top.question, url=top.url, relevance=round(top.relevance, 3))]
+    if route == "OFFTOPIC":
+        logger.info("[RAG] faq_route: OFFTOPIC")
         return OFF_TOPIC, []
 
-    logger.info(f"[RAG] Evaluating candidate via Ollama faq_route...")
-    candidate = valid_hits[0]
-    route = await ollama.faq_route(message, candidate.question, candidate.answer)
-    if route == "MATCH":
-        logger.info(f"[RAG] Candidate MATCH: '{candidate.question[:50]}...'")
-        source = Source(
-            question=candidate.question,
-            url=candidate.url,
-            relevance=round(candidate.relevance, 3),
-        )
-        return candidate.answer, [source]
-
-    if in_domain:
-        logger.info("[RAG] Domain support question without exact match. Decision: NO_EXACT_ANSWER")
-        return NO_EXACT_ANSWER, []
-
-    logger.info("[RAG] Decision: OFF_TOPIC")
-    return OFF_TOPIC, []
+    # SUPPORT: domain question, but no exact answer in KB
+    logger.info("[RAG] faq_route: SUPPORT — no exact answer. Decision: NO_EXACT_ANSWER")
+    return NO_EXACT_ANSWER, []
 
 
 async def require_admin(x_admin_token: str | None = Header(default=None)) -> None:
