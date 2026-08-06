@@ -70,9 +70,19 @@ class KnowledgeBase:
             logger.info("[Chroma] KnowledgeBase collection is empty, triggering auto-rebuild...")
             await self.rebuild()
         embedding = (await self.ollama.embed([query]))[0]
-        result = self._collection().query(
-            query_embeddings=[embedding], n_results=min(limit or settings.top_k, self.count)
-        )
+        try:
+            result = self._collection().query(
+                query_embeddings=[embedding], n_results=min(limit or settings.top_k, max(1, self.count))
+            )
+        except Exception as e:
+            if "dimension" in str(e).lower() or "InvalidArgumentError" in type(e).__name__:
+                logger.warning(f"[Chroma] Dimension mismatch detected ({e}). Automatically rebuilding KnowledgeBase index...")
+                await self.rebuild()
+                result = self._collection().query(
+                    query_embeddings=[embedding], n_results=min(limit or settings.top_k, max(1, self.count))
+                )
+            else:
+                raise
         hits: list[Hit] = []
         for meta, distance in zip(result["metadatas"][0], result["distances"][0]):
             relevance = max(0.0, 1.0 - float(distance))
