@@ -74,9 +74,9 @@ async def resolve_knowledge(message: str, raw_message: str | None = None) -> tup
             return NO_EXACT_ANSWER, []
         return OFF_TOPIC, []
 
-    logger.info(f"[RAG] Evaluating {len(valid_hits)} candidate(s) via Ollama faq_route...")
+    logger.info(f"[RAG] Evaluating up to 2 candidate(s) via Ollama faq_route...")
     saw_support = False
-    for candidate in valid_hits:
+    for candidate in valid_hits[:2]:
         route = await ollama.faq_route(message, candidate.question, candidate.answer)
         if route == "MATCH":
             logger.info(f"[RAG] Candidate MATCH: '{candidate.question[:50]}...'")

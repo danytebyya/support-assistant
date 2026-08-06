@@ -113,17 +113,15 @@ class OllamaClient:
         t0 = time.perf_counter()
         clean_question = question.replace("---", "-").replace("===", "=").replace("```", "'''")
         system = (
-            f"{SYSTEM_PROMPT}\n\n"
-            "Распредели вопрос пользователя ровно в одну категорию.\n"
-            "MATCH — статья FAQ помогает решить описанную ситуацию, включая синонимы, "
-            "разговорные формулировки и условные решения.\n"
-            "SUPPORT — вопрос относится к Lime HD TV, приложению, каналам, аккаунту, оплате, "
-            "подписке или настройкам, но данная статья не даёт подходящего решения.\n"
-            "OFFTOPIC — вопрос не относится к сервису Lime HD TV, например вычисления, погода, "
-            "написание кода или общие знания.\n"
-            "Ответь только MATCH, SUPPORT или OFFTOPIC."
+            "Ты — классификатор вопросов службы поддержки Lime HD TV.\n"
+            "Определи, дает ли статья FAQ ответ или подходящее решение на вопрос пользователя.\n"
+            "Правила:\n"
+            "MATCH — статья относится к проблеме пользователя и предлагает её решение.\n"
+            "SUPPORT — статья о Lime HD TV, но НЕ решает данную конкретную проблему пользователя.\n"
+            "OFFTOPIC — вопрос пользователя вообще не относится к телевизионному сервису Lime HD TV.\n"
+            "Ответь строго одним словом: MATCH, SUPPORT или OFFTOPIC."
         )
-        user = f"ВОПРОС ПОЛЬЗОВАТЕЛЯ:\n{clean_question}\n\nСТАТЬЯ FAQ:\n{faq_question}\n{faq_answer}"
+        user = f"ВОПРОС ПОЛЬЗОВАТЕЛЯ:\n{clean_question}\n\nСТАТЬЯ FAQ:\nВопрос: {faq_question}\nОтвет: {faq_answer}"
         logger.info(f"[RAG Route] Checking candidate FAQ: '{faq_question[:50]}...' for question: '{question[:50]}...'")
         try:
             client = await self.get_client()
@@ -152,7 +150,7 @@ class OllamaClient:
             return route
         except Exception as exc:
             logger.error(f"[RAG Route] Ollama call failed for candidate '{faq_question[:50]}...': {exc}")
-            raise
+            return "SUPPORT"
 
     async def available(self) -> bool:
         try:
