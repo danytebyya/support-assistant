@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     max_message_length: int = 1000
     top_k: int = 4
     min_relevance: float = 0.36
-    direct_answer_relevance: float = 0.78
+    direct_answer_relevance: float = 0.82
     admin_token: str = "change-this-before-production"
     trust_proxy: bool = False
 
