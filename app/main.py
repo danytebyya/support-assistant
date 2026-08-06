@@ -61,7 +61,15 @@ async def resolve_knowledge(message: str, raw_message: str | None = None) -> tup
         return NO_EXACT_ANSWER, []
 
     top = hits[0]
-    logger.info(f"[RAG] Top hit: '{top.question[:50]}...' with relevance {top.relevance:.3f} (threshold: {settings.direct_answer_relevance})")
+    in_domain = likely_in_domain(message)
+    logger.info(f"[RAG] Top hit: '{top.question[:50]}...' with relevance {top.relevance:.3f} (in_domain={in_domain})")
+
+    # Fast off-topic check for non-domain queries with relevance < 0.80
+    if not in_domain and top.relevance < 0.80:
+        logger.info(f"[RAG] Out-of-domain query with relevance {top.relevance:.3f} < 0.80. Decision: OFF_TOPIC")
+        return OFF_TOPIC, []
+
+    # Direct match for domain questions
     if top.relevance >= settings.direct_answer_relevance:
         logger.info(f"[RAG] Direct match found: '{top.question[:50]}...'")
         source = Source(question=top.question, url=top.url, relevance=round(top.relevance, 3))
@@ -70,27 +78,26 @@ async def resolve_knowledge(message: str, raw_message: str | None = None) -> tup
     valid_hits = [h for h in hits if h.relevance >= settings.min_relevance]
     if not valid_hits:
         logger.info(f"[RAG] All hits below min_relevance ({settings.min_relevance}).")
-        if likely_in_domain(message):
+        if in_domain:
             return NO_EXACT_ANSWER, []
         return OFF_TOPIC, []
 
-    logger.info(f"[RAG] Evaluating up to 2 candidate(s) via Ollama faq_route...")
-    saw_support = False
-    for candidate in valid_hits[:2]:
-        route = await ollama.faq_route(message, candidate.question, candidate.answer)
-        if route == "MATCH":
-            logger.info(f"[RAG] Candidate MATCH: '{candidate.question[:50]}...'")
-            source = Source(
-                question=candidate.question,
-                url=candidate.url,
-                relevance=round(candidate.relevance, 3),
-            )
-            return candidate.answer, [source]
-        saw_support = saw_support or route == "SUPPORT"
+    logger.info(f"[RAG] Evaluating candidate via Ollama faq_route...")
+    candidate = valid_hits[0]
+    route = await ollama.faq_route(message, candidate.question, candidate.answer)
+    if route == "MATCH":
+        logger.info(f"[RAG] Candidate MATCH: '{candidate.question[:50]}...'")
+        source = Source(
+            question=candidate.question,
+            url=candidate.url,
+            relevance=round(candidate.relevance, 3),
+        )
+        return candidate.answer, [source]
 
-    if saw_support or likely_in_domain(message):
-        logger.info("[RAG] No exact MATCH found. Decision: NO_EXACT_ANSWER")
+    if in_domain:
+        logger.info("[RAG] Domain support question without exact match. Decision: NO_EXACT_ANSWER")
         return NO_EXACT_ANSWER, []
+
     logger.info("[RAG] Decision: OFF_TOPIC")
     return OFF_TOPIC, []
 
