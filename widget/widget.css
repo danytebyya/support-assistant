@@ -555,7 +555,7 @@ textarea:focus {
     transform: none !important;
     transition: opacity 0.22s ease, visibility 0s linear 0.22s;
     overscroll-behavior: contain;
-    touch-action: none;
+    touch-action: pan-y;
     display: flex;
     flex-direction: column;
     overflow: hidden;
